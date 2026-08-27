@@ -99,7 +99,7 @@ func mapErrorStatus(err error) int {
 		errors.Is(err, model.ErrAttributionNotFound):
 		return http.StatusNotFound
 	case errors.Is(err, model.ErrDuplicateCode),
-		err == model.ErrDuplicateFingerprint,
+		errors.Is(err, model.ErrDuplicateFingerprint),
 		errors.Is(err, model.ErrVersionConflict),
 		errors.Is(err, model.ErrSourceCycle):
 		return http.StatusConflict

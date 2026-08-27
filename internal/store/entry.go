@@ -16,7 +16,7 @@ func (s *Store) InsertEntry(e *model.ProgramEntry) error {
 		e.BatchID, e.Fingerprint, e.Title, e.Callsign, e.PrintedStartMS, e.PrintedEndMS, e.PageID, e.Transmitter, e.Status)
 	if err != nil {
 		if isUniqueErr(err) {
-			return fmt.Errorf("store: duplicate fingerprint: %v", model.ErrDuplicateFingerprint)
+			return fmt.Errorf("store: duplicate fingerprint: %w", model.ErrDuplicateFingerprint)
 		}
 		return fmt.Errorf("store: insert entry: %v", err)
 	}

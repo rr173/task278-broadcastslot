@@ -23,21 +23,21 @@ func (svc *Service) AddEntry(batchID int64, title, callsign string, printedStart
 		PageID: pageID, Transmitter: transmitter, Status: model.EntryRaw,
 	}
 	if err := evidence.Fill(&incoming); err != nil {
-		return nil, fmt.Errorf("service: fill entry: %v", err)
+		return nil, fmt.Errorf("service: fill entry: %w", err)
 	}
 	existing, err := svc.store.GetEntryByFingerprint(batchID, incoming.Fingerprint)
 	if err != nil {
-		return nil, fmt.Errorf("service: lookup fingerprint: %v", err)
+		return nil, fmt.Errorf("service: lookup fingerprint: %w", err)
 	}
 	resolved, err := evidence.Resolve(existing, incoming)
 	if err != nil {
-		return nil, fmt.Errorf("service: resolve entry: %v", err)
+		return nil, fmt.Errorf("service: resolve entry: %w", err)
 	}
 	if existing != nil && resolved.ID == existing.ID {
 		return existing, nil
 	}
 	if err := svc.store.InsertEntry(resolved); err != nil {
-		return nil, fmt.Errorf("service: add entry: %v", err)
+		return nil, fmt.Errorf("service: add entry: %w", err)
 	}
 	return resolved, nil
 }
