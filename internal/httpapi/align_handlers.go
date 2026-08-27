@@ -12,7 +12,7 @@ func (s *Server) handleCorrect(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
-	list, err := s.svc.Correct(context.Background(), batchID)
+	list, err := s.svc.Correct(r.Context(), batchID)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -40,7 +40,7 @@ func (s *Server) handleAlign(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
-	res, err := s.svc.Align(context.Background(), batchID)
+	res, err := s.svc.Align(r.Context(), batchID)
 	if err != nil {
 		writeError(w, err)
 		return

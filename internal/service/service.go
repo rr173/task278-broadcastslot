@@ -91,9 +91,8 @@ func (svc *Service) Stats() (*model.Stats, error) {
 	return svc.store.Stats()
 }
 
-// Correct 钟差校正，尊重 ctx。
+// Correct 钟差校正。ctx 取消时中止计算并回滚，不落盘。
 func (svc *Service) Correct(ctx context.Context, batchID int64) ([]model.ClockCorrection, error) {
-	ctx = context.Background()
 	b, err := svc.requireBatch(batchID)
 	if err != nil {
 		return nil, err
@@ -152,9 +151,8 @@ type AlignResult struct {
 	Conflicts    []model.AttributionConflict `json:"conflicts"`
 }
 
-// Align 构造序列、检测冲突并写回归属（持 serialMu）。
+// Align 构造序列、检测冲突并写回归属（持 serialMu）。ctx 取消时回滚，不落盘。
 func (svc *Service) Align(ctx context.Context, batchID int64) (AlignResult, error) {
-	ctx = context.Background()
 	svc.serialMu.Lock()
 	defer svc.serialMu.Unlock()
 
