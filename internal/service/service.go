@@ -91,7 +91,8 @@ func (svc *Service) Stats() (*model.Stats, error) {
 	return svc.store.Stats()
 }
 
-// Correct 钟差校正，尊重 ctx。
+// Correct 钟差校正：先在内存算完整批校正，再以单事务整批写入（替换旧校正）。
+// ctx 取消则整批回滚，库里不留下半写成的钟差；校正行与状态推进同生共死。
 func (svc *Service) Correct(ctx context.Context, batchID int64) ([]model.ClockCorrection, error) {
 	b, err := svc.requireBatch(batchID)
 	if err != nil {
@@ -110,29 +111,38 @@ func (svc *Service) Correct(ctx context.Context, batchID int64) ([]model.ClockCo
 	}
 	ref, hasRef := clockfix.RefPrinted(ads)
 
-	var corrections []model.ClockCorrection
+	// 先算完整批校正暂存内存，期间随时尊重 ctx：取消则尚未写入任何行，自然整批回滚。
+	corrections := make([]model.ClockCorrection, 0, len(entries)*2)
 	for _, e := range entries {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		start, end, err := clockfix.CorrectSlot(e.PrintedStartMS, e.PrintedEndMS, b.Timezone, b.DriftPPM, ref, hasRef)
 		if err != nil {
 			return nil, err
 		}
-		one := []model.ClockCorrection{
-			{SubjectKind: "entry_start", SubjectID: e.ID, PrintedMS: e.PrintedStartMS, UTCMS: start, Method: "clockfix"},
-			{SubjectKind: "entry_end", SubjectID: e.ID, PrintedMS: e.PrintedEndMS, UTCMS: end, Method: "clockfix"},
-		}
-		if err := svc.store.WithTx(context.Background(), func(tx *sql.Tx) error {
-			return store.AppendCorrectionsTx(tx, batchID, one)
-		}); err != nil {
-			return nil, err
-		}
-		corrections = append(corrections, one...)
-		time.Sleep(2 * time.Millisecond)
+		corrections = append(corrections,
+			model.ClockCorrection{SubjectKind: "entry_start", SubjectID: e.ID, PrintedMS: e.PrintedStartMS, UTCMS: start, Method: "clockfix"},
+			model.ClockCorrection{SubjectKind: "entry_end", SubjectID: e.ID, PrintedMS: e.PrintedEndMS, UTCMS: end, Method: "clockfix"},
+		)
 	}
 	if err := ctx.Err(); err != nil {
-		return corrections, err
+		return nil, err
 	}
-	if b.Status == model.BatchOrganizing {
-		_ = svc.store.UpdateBatchStatus(batchID, model.BatchPendingAlign, b.SealedAt)
+
+	// 整批写入与状态推进共用同一事务，WithTx 绑定 ctx：提交前若已取消则回滚，不留半写校正。
+	if err := svc.store.WithTx(ctx, func(tx *sql.Tx) error {
+		if err := store.ReplaceCorrectionsTx(tx, batchID, corrections); err != nil {
+			return err
+		}
+		if b.Status == model.BatchOrganizing {
+			if err := store.UpdateBatchStatusTx(tx, batchID, model.BatchPendingAlign, b.SealedAt); err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
+		return nil, err
 	}
 	return corrections, nil
 }
