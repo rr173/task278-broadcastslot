@@ -19,8 +19,6 @@ type Service struct {
 	store      *store.Store
 	serialMu   sync.Mutex
 	seqBuilder sequence.Builder
-	attrScratch []model.SlotAttribution
-	confScratch []model.AttributionConflict
 }
 
 // New 构造 Service。
@@ -166,8 +164,10 @@ func (svc *Service) Align(ctx context.Context, batchID int64) (AlignResult, erro
 		return AlignResult{}, err
 	}
 
-	svc.attrScratch = svc.attrScratch[:0]
-	svc.confScratch = svc.confScratch[:0]
+	// attrScratch/confScratch 用局部切片累积本批结果，连续两次对齐互不共享底层数组，
+	// 保证后一批对齐不会覆盖前一批 AlignResult.Attributions/Conflicts 的内容。
+	var attrScratch []model.SlotAttribution
+	var confScratch []model.AttributionConflict
 	var result AlignResult
 	err = svc.store.WithTx(ctx, func(tx *sql.Tx) error {
 		if err := ctx.Err(); err != nil {
@@ -245,9 +245,9 @@ func (svc *Service) Align(ctx context.Context, batchID int64) (AlignResult, erro
 			if err := store.InsertConflictTx(tx, &c); err != nil {
 				return err
 			}
-			svc.confScratch = append(svc.confScratch, c)
-			result.Conflicts = svc.confScratch
+			confScratch = append(confScratch, c)
 		}
+		result.Conflicts = confScratch
 
 		clipByCallsign := map[string]int64{}
 		for _, clip := range clips {
@@ -290,8 +290,8 @@ func (svc *Service) Align(ctx context.Context, batchID int64) (AlignResult, erro
 			if err := store.UpdateEntryStatusTx(tx, e.ID, entryStatus); err != nil {
 				return err
 			}
-			svc.attrScratch = append(svc.attrScratch, attr)
-			result.Attributions = svc.attrScratch
+			attrScratch = append(attrScratch, attr)
+			result.Attributions = attrScratch
 		}
 
 		if b.Status == model.BatchPendingAlign || b.Status == model.BatchOrganizing {
