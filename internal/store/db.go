@@ -77,8 +77,10 @@ func (s *Store) WithTx(ctx context.Context, fn func(tx *sql.Tx) error) error {
 		return fmt.Errorf("store: begin: %v", err)
 	}
 	if err := fn(tx); err != nil {
-		if cerr := tx.Commit(); cerr != nil {
-			return err
+		// 事务体出错（含 ctx 取消）必须回滚，丢弃 DeleteAttributionsTx 等
+		// 已写未决改动，回到调用前状态；提交会把清空的归属表落盘。
+		if cerr := tx.Rollback(); cerr != nil && cerr != sql.ErrTxDone {
+			return fmt.Errorf("store: rollback: %v (cause: %v)", cerr, err)
 		}
 		return err
 	}
