@@ -85,28 +85,15 @@ func (svc *Service) BuildVersion(batchID int64) (*model.ScheduleVersion, error) 
 }
 
 // ListVersions 列出播出表版本。
+//
+// 冻结/被取代版本的 content_hash 与 payload 均为冻结当时写入的不可变值，
+// 必须原样返回存库结果；禁止用当前 live 数据重算，否则改动现场条目会让
+// 已冻结哈希随之漂移。草稿版本尚未冻结，无 payload 与 hash，按现状返回。
 func (svc *Service) ListVersions(batchID int64) ([]model.ScheduleVersion, error) {
 	if _, err := svc.requireBatch(batchID); err != nil {
 		return nil, err
 	}
-	list, err := svc.store.ListVersions(batchID)
-	if err != nil {
-		return nil, err
-	}
-	live, err := svc.store.ListEntries(batchID)
-	if err != nil {
-		return nil, err
-	}
-	_, hash, err := snapshot.Freeze(snapshot.Payload{Entries: live})
-	if err != nil {
-		return nil, err
-	}
-	for i := range list {
-		if list[i].Status == model.VersionFrozen || list[i].Status == model.VersionSuperseded {
-			list[i].ContentHash = hash
-		}
-	}
-	return list, nil
+	return svc.store.ListVersions(batchID)
 }
 
 // PublishVersion 持 serialMu：深拷贝现场冻结到 payload，旧 frozen 标 superseded。

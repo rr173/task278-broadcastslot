@@ -66,4 +66,21 @@ func TestFrozenPayloadUnchangedAfterLiveEdit(t *testing.T) {
 	if err != nil || len(parsed.Entries) == 0 {
 		t.Fatalf("payload parse: %v len=%d", err, len(parsed.Entries))
 	}
+
+	// 列出版本时，冻结版本的 content_hash 必须仍是冻结当时的值，
+	// 不得用 live 条目重算而随现场改动漂移。
+	listed, err := svc.ListVersions(b.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, lv := range listed {
+		if lv.Version == draft.Version {
+			if lv.ContentHash != savedHash {
+				t.Fatalf("ListVersions hash drifted: %s vs %s", lv.ContentHash, savedHash)
+			}
+			if lv.Payload != savedPayload {
+				t.Fatal("ListVersions payload changed after live edit")
+			}
+		}
+	}
 }
