@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 
 	"task278-broadcastslot/internal/httpapi"
@@ -59,6 +60,45 @@ func TestHealthz(t *testing.T) {
 	srv.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("healthz: %d", rec.Code)
+	}
+}
+
+// TestCitationCycleReturns409 两条互相引用的来源在登记第二条边时成环，
+// 接口必须以 409 冲突返回，而非 500 内部错误。
+func TestCitationCycleReturns409(t *testing.T) {
+	srv := newTestServer(t)
+
+	batch := map[string]any{
+		"code": "CYC-1", "station": "S", "air_date": "1952-01-01", "timezone": "UTC",
+	}
+	bb, _ := json.Marshal(batch)
+	req := httptest.NewRequest(http.MethodPost, "/api/batches", bytes.NewReader(bb))
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create batch: %d body=%s", rec.Code, rec.Body.String())
+	}
+	var created struct {
+		ID int64 `json:"id"`
+	}
+	_ = json.Unmarshal(rec.Body.Bytes(), &created)
+
+	post := func(from, to string) *httptest.ResponseRecorder {
+		body, _ := json.Marshal(map[string]any{"from_ref": from, "to_ref": to, "kind": "cross"})
+		r := httptest.NewRequest(http.MethodPost,
+			"/api/batches/"+strconv.FormatInt(created.ID, 10)+"/citations", bytes.NewReader(body))
+		rc := httptest.NewRecorder()
+		srv.Handler().ServeHTTP(rc, r)
+		return rc
+	}
+
+	if rc := post("entry:1", "clip:1"); rc.Code != http.StatusCreated {
+		t.Fatalf("first citation want 201 got %d body=%s", rc.Code, rc.Body.String())
+	}
+	// 互相引用：clip:1 -> entry:1，与已登记的 entry:1 -> clip:1 成环。
+	rc := post("clip:1", "entry:1")
+	if rc.Code != http.StatusConflict {
+		t.Fatalf("mutual citation cycle want 409 got %d body=%s", rc.Code, rc.Body.String())
 	}
 }
 

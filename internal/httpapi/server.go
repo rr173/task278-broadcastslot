@@ -101,7 +101,7 @@ func mapErrorStatus(err error) int {
 	case errors.Is(err, model.ErrDuplicateCode),
 		errors.Is(err, model.ErrDuplicateFingerprint),
 		errors.Is(err, model.ErrVersionConflict),
-		err == model.ErrSourceCycle:
+		errors.Is(err, model.ErrSourceCycle):
 		return http.StatusConflict
 	case errors.Is(err, model.ErrSlotInverted),
 		errors.Is(err, model.ErrSealed),

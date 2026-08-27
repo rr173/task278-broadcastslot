@@ -124,11 +124,11 @@ func (svc *Service) AddCitation(batchID int64, fromRef, toRef, kind string) (*mo
 		return nil, err
 	}
 	if err := conflict.DetectCycle(existing, fromRef, toRef); err != nil {
-		return nil, fmt.Errorf("service: citation cycle: %v", err)
+		return nil, fmt.Errorf("service: citation cycle: %w", err)
 	}
 	c := &model.SourceCitation{BatchID: batchID, FromRef: fromRef, ToRef: toRef, Kind: kind}
 	if err := svc.store.InsertCitation(c); err != nil {
-		return nil, fmt.Errorf("service: insert citation: %v", err)
+		return nil, fmt.Errorf("service: insert citation: %w", err)
 	}
 	return c, nil
 }

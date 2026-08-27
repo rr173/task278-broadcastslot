@@ -1,7 +1,6 @@
 package httpapi
 
 import (
-	"fmt"
 	"net/http"
 )
 
@@ -139,7 +138,7 @@ func (s *Server) handleAddCitation(w http.ResponseWriter, r *http.Request) {
 	}
 	c, err := s.svc.AddCitation(batchID, req.FromRef, req.ToRef, req.Kind)
 	if err != nil {
-		writeError(w, fmt.Errorf("http citation: %v", err))
+		writeError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, c)
