@@ -66,8 +66,6 @@ func ListAttributionsTx(tx *sql.Tx, batchID int64) ([]model.SlotAttribution, err
 	return listAttributions(tx, batchID)
 }
 
-var attrScratch []model.SlotAttribution
-
 func listAttributions(ex execer, batchID int64) ([]model.SlotAttribution, error) {
 	rows, err := ex.QueryContext(context.Background(),
 		`SELECT id,batch_id,entry_id,clip_id,utc_start_ms,utc_end_ms,status,delay_ms
@@ -84,9 +82,5 @@ func listAttributions(ex execer, batchID int64) ([]model.SlotAttribution, error)
 		}
 		out = append(out, a)
 	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	attrScratch = append(attrScratch[:0], out...)
-	return attrScratch, nil
+	return out, rows.Err()
 }

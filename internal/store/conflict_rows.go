@@ -57,11 +57,5 @@ func listConflicts(ex execer, batchID int64) ([]model.AttributionConflict, error
 		}
 		found = append(found, c)
 	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	conflictScratch = append(conflictScratch[:0], found...)
-	return conflictScratch, nil
+	return found, rows.Err()
 }
-
-var conflictScratch []model.AttributionConflict
